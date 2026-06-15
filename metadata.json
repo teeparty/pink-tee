@@ -1,0 +1,6 @@
+{
+  "name": "Retro Visual Bell Schedule",
+  "description": "A 90s-style customizable visual bell schedule with draggable widgets, timers, and URL state saving.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

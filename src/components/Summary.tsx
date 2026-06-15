@@ -1,0 +1,99 @@
+import React from 'react';
+import { Period } from '../types';
+
+interface SummaryProps {
+  periods: Period[];
+  activePeriodId: string | null;
+  themeColor: string;
+  periodRemainingMs?: number;
+  zoom?: number;
+}
+
+export function Summary({ periods, activePeriodId, themeColor, periodRemainingMs, zoom = 1 }: SummaryProps) {
+  const activeIndex = periods.findIndex(p => p.id === activePeriodId);
+  
+  if (activeIndex === -1) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white">
+        <div className="opacity-50 text-center uppercase tracking-widest text-sm" style={{ zoom: zoom }}>
+          WAITING FOR SCHEDULE
+        </div>
+      </div>
+    );
+  }
+
+  const formatMs = (ms: number) => {
+    const totalSeconds = Math.floor(Math.abs(ms) / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${ms < 0 ? '-' : ''}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="!flex !flex-col !flex-1 min-h-0 p-0 relative bg-white">
+      {periodRemainingMs != null && (
+        <div 
+          className="shrink-0 flex flex-col items-center justify-center p-4 border-b-4 mb-0 bg-white" 
+          style={{ borderColor: `${themeColor}40`, zoom: zoom }}
+        >
+          <div className="uppercase tracking-widest text-sm font-black text-black mb-1">
+            Time Left In the Period
+          </div>
+          <div className="font-pixel text-4xl tracking-widest font-black text-black flex items-center gap-2 drop-shadow-sm">
+            {formatMs(periodRemainingMs)}
+          </div>
+        </div>
+      )}
+      <div className="!flex-1 overflow-y-auto min-h-0 pb-2">
+        <div style={{ zoom: zoom }}>
+          {periods.map((period, i) => {
+        const isActive = activeIndex === i;
+        const isPast = activeIndex !== -1 && i < activeIndex;
+        
+        const color = period.color || themeColor;
+        const dotBg = isActive ? color : (isPast ? `${color}40` : `${color}80`);
+        const textStyle = isActive ? { color, opacity: 1 } : (isPast ? { opacity: 0.3 } : { opacity: 0.7 });
+
+        return (
+          <div 
+            key={period.id + i} 
+            className="flex items-center justify-between p-3 border-b-2 last:border-b-0 gap-2"
+            style={{ borderColor: `${themeColor}40` }}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div 
+                className="w-3 h-3 rounded-full flex-shrink-0" 
+                style={{ backgroundColor: dotBg }} 
+              />
+              <span className={`font-bold uppercase tracking-wider truncate ${isActive ? 'text-lg' : ''}`} style={textStyle}>
+                {period.name}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <span className="font-pixel tracking-widest text-lg hidden @xs:inline-block" style={textStyle}>
+                {period.durationMinutes} min
+              </span>
+              <div 
+                className="px-2 py-1 text-[10px] @xs:text-xs font-bold uppercase min-w-[60px] @xs:min-w-[80px] text-center flex-shrink-0"
+                style={isActive ? {
+                  backgroundColor: '#1e293b',
+                  color: 'white'
+                } : {
+                  backgroundColor: 'transparent',
+                  color: isPast ? `${themeColor}60` : `${themeColor}80`,
+                  borderColor: isPast ? `${themeColor}20` : `${themeColor}40`,
+                  borderWidth: '1px'
+                }}
+              >
+                {isActive ? 'ACTIVE' : (isPast ? 'DONE' : 'UPCOMING')}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+        </div>
+      </div>
+    </div>
+  );
+}
