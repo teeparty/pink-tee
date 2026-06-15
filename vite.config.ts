@@ -3,8 +3,12 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({ command }) => {
   return {
+    // GitHub Pages serves this project at https://teeparty.github.io/pink-tee/,
+    // so production assets must be referenced from the /pink-tee/ subpath.
+    // Local dev (`vite`/serve) stays at the root.
+    base: command === 'build' ? '/pink-tee/' : '/',
     plugins: [react(), tailwindcss()],
     // react-draggable (used by react-rnd) references `process.env.DRAGGABLE_DEBUG`
     // in its drag-start path, which throws "process is not defined" in the browser
