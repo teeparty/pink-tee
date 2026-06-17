@@ -14,7 +14,7 @@ export function Summary({ periods, activePeriodId, themeColor, periodRemainingMs
   
   if (activeIndex === -1) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white">
+      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white" style={{ color: 'black' }}>
         <div className="opacity-50 text-center uppercase tracking-widest text-sm" style={{ zoom: zoom }}>
           WAITING FOR SCHEDULE
         </div>
@@ -52,7 +52,7 @@ export function Summary({ periods, activePeriodId, themeColor, periodRemainingMs
         
         const color = period.color || themeColor;
         const dotBg = isActive ? color : (isPast ? `${color}40` : `${color}80`);
-        const textStyle = isActive ? { color, opacity: 1 } : (isPast ? { opacity: 0.3 } : { opacity: 0.7 });
+        const textStyle = isActive ? { color: '#000000', opacity: 1 } : (isPast ? { color: '#000000', opacity: 0.3 } : { color: '#000000', opacity: 0.7 });
 
         return (
           <div 

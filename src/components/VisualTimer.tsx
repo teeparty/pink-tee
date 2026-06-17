@@ -53,6 +53,61 @@ export function VisualTimer({
   const VIEWBOX_SIZE = 1000;
   const CENTER = VIEWBOX_SIZE / 2;
 
+  if (currentPeriod.type === 'transition') {
+    const globalRatio = periodTotalMs && periodTotalMs > 0 ? Math.max(0, Math.min(1, 1 - (periodRemainingMs / periodTotalMs))) : 0;
+    
+    return (
+      <div className="flex-1 flex w-full h-full relative items-center justify-center p-8 timer-drag-handle cursor-move">
+        <div className="flex flex-col items-center justify-center w-full max-w-4xl gap-8">
+          <div 
+             className="font-pixel tracking-widest drop-shadow-md text-6xl sm:text-8xl md:text-9xl mb-4" 
+             style={{ color: activeColor }}
+          >
+            {formattedTime}
+          </div>
+          
+          {/* We assume the user attached the generated animation to be play as cat.mp4 in the future, 
+              or if the provided attachment is available it would be passed, here we 
+              add an img or video tag placeholder since we don't know the exact file path. 
+              We'll use a video tag assuming it's an mp4. */}
+          <div className="flex items-center justify-center h-48 sm:h-64 mb-4">
+             <video 
+               src="/catlong.mp4?v=2" 
+               autoPlay 
+               loop 
+               muted 
+               playsInline
+               style={{
+                 maxWidth: '100%',
+                 maxHeight: '100%',
+                 objectFit: 'contain'
+               }}
+               onError={(e) => {
+                 // if video fails, try image just in case
+                 (e.target as HTMLVideoElement).outerHTML = '<img src="/catlong.gif" style="max-width: 100%; max-height: 100%; object-fit: contain;" />';
+               }}
+             />
+          </div>
+
+          <div className="w-full bg-black/10 rounded-full h-8 overflow-hidden relative shadow-inner">
+            <div 
+              className="absolute top-0 left-0 bottom-0 transition-all duration-1000 ease-linear rounded-full shadow-md"
+              style={{ 
+                backgroundColor: activeColor,
+                width: `${(1 - globalRatio) * 100}%` 
+              }}
+            />
+          </div>
+          
+          <div className="flex justify-between w-full font-bold tracking-widest uppercase opacity-80 mt-2 font-mono text-xl" style={{ color: activeColor }}>
+            <span>{currentPeriod.name}</span>
+            {nextPeriod && (<span>UP NEXT: {nextPeriod.name}</span>)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Single Ring
   const ringRadius = 400;
   const ringStroke = ringThickness;
@@ -69,7 +124,7 @@ export function VisualTimer({
 
   return (
     <div className="flex-1 flex w-full h-full relative items-center justify-center p-4 timer-drag-handle cursor-move">
-      <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="w-full h-full max-w-[90vmin] max-h-[90vmin] drop-shadow-md overflow-visible pointer-events-none">
+      <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="w-full h-full drop-shadow-md overflow-visible pointer-events-none">
             
          {/* Rings Group: Rotated -90deg so it starts at 12 o'clock */}
          <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
@@ -192,38 +247,40 @@ export function VisualTimer({
          </foreignObject>
 
          {/* Left Outer Star (Ring Thickness Control) */}
-         <foreignObject x={outerLeftEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible">
+         <foreignObject x={outerLeftEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible cancel">
             <div className="flex flex-col items-center justify-start group w-full h-full pt-4">
               <Star
-                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110"
+                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110 cancel"
                 fill="currentColor"
                 size={32}
               />
-              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto">
+              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto cancel">
                 <input
                   type="range" min={40} max={250} value={ringThickness}
                   onChange={(e) => setRingThickness(Number(e.target.value))}
-                  className="w-24 cursor-pointer"
+                  className="w-24 cursor-pointer cancel"
                   onPointerDown={(e) => e.stopPropagation()} 
+                  onMouseDown={(e) => e.stopPropagation()}
                 />
               </div>
             </div>
          </foreignObject>
 
          {/* Right Inner Star Mirror (Text Scale Control) */}
-         <foreignObject x={innerRightEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible">
+         <foreignObject x={innerRightEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible cancel">
             <div className="flex flex-col items-center justify-start group w-full h-full pt-4">
               <Star
-                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110"
+                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110 cancel"
                 fill="currentColor"
                 size={32}
               />
-              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto">
+              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto cancel">
                 <input
                   type="range" min={0.5} max={3.0} step={0.1} value={textScale}
                   onChange={(e) => setTextScale(Number(e.target.value))}
-                  className="w-24 cursor-pointer"
+                  className="w-24 cursor-pointer cancel"
                   onPointerDown={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
                 />
               </div>
             </div>

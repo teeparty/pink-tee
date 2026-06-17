@@ -26,6 +26,7 @@ export interface WindowState {
   isOpen: boolean;
   zIndex: number;
   zoom?: number;
+  focusMode?: boolean;
 }
 
 export interface PronunciationOverride {
@@ -36,9 +37,13 @@ export interface PronunciationOverride {
 
 export interface AppState {
   themeColor: string;
+  panelsThemeColor: string;
+  summaryThemeColor?: string;
+  segmentsThemeColor?: string;
   uiTitle: string;
   brandLogo: string;
   timingMode: TimingMode;
+  mainFocusMode?: boolean;
   startTime: string; // HH:mm format
   sequentialStartMs: number | null;
   sequentialElapsedMs: number;

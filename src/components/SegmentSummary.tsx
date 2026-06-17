@@ -11,7 +11,7 @@ interface SegmentSummaryProps {
 export function SegmentSummary({ period, activeSegmentId, themeColor, zoom = 1 }: SegmentSummaryProps) {
   if (!period) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white">
+      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white" style={{ color: 'black' }}>
         <div className="opacity-50 text-center uppercase tracking-widest text-sm" style={{ zoom: zoom }}>
           WAITING FOR ACTIVITY
         </div>
@@ -23,7 +23,7 @@ export function SegmentSummary({ period, activeSegmentId, themeColor, zoom = 1 }
   
   if (segments.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white">
+      <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white" style={{ color: 'black' }}>
         <div className="opacity-50 text-center uppercase tracking-widest text-sm" style={{ zoom: zoom }}>
           NO SUB-TIMERS
         </div>
@@ -44,7 +44,7 @@ export function SegmentSummary({ period, activeSegmentId, themeColor, zoom = 1 }
 
         const color = segment.color || period.color || themeColor;
         const dotBg = isActive ? color : (isPast ? `${color}40` : `${color}80`);
-        const textStyle = isActive ? { color, opacity: 1 } : (isPast ? { opacity: 0.3 } : { opacity: 0.7 });
+        const textStyle = isActive ? { color: '#000000', opacity: 1 } : (isPast ? { color: '#000000', opacity: 0.3 } : { color: '#000000', opacity: 0.7 });
 
         return (
           <div 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragOverEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Period, Segment } from '../types';
 import { GripVertical, Trash2, Plus, Copy, EyeOff, Settings } from 'lucide-react';
@@ -13,6 +13,65 @@ interface SpreadsheetProps {
   startTime: string; // HH:mm
   themeColor: string;
   activePeriodId: string | null;
+}
+
+function SortableSegment({ seg, periodColor, themeColor, onUpdate, onDelete }: { seg: Segment, periodColor?: string, themeColor: string, onUpdate: (id: string, updates: Partial<Segment>) => void, onDelete: (id: string) => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: seg.id,
+    data: {
+      type: 'Segment',
+      segment: seg,
+    }
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  const segColor = seg.color || periodColor || themeColor;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ ...style, borderColor: segColor, color: segColor }}
+      className="flex items-center text-xs uppercase border border-dashed bg-white"
+    >
+      <div 
+        className="p-1 cursor-move opacity-50 px-2 border-r border-dashed" 
+        style={{ borderColor: segColor }}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical size={12} />
+      </div>
+      <div className="px-1 border-r border-dashed" style={{ borderColor: segColor }}>
+        <input 
+          type="color" 
+          value={segColor} 
+          onChange={e => onUpdate(seg.id, { color: e.target.value })} 
+          className="w-4 h-4 p-0 border-none cursor-pointer bg-transparent" 
+          title="Segment Color"
+        />
+      </div>
+      <input 
+        className="bg-transparent border-none outline-none font-bold w-24 p-1 px-2"
+        value={seg.name}
+        onChange={e => onUpdate(seg.id, { name: e.target.value })}
+      />
+      <input 
+        type="number"
+        className="bg-transparent border-none outline-none text-right w-10 p-1 opacity-80"
+        value={seg.durationMinutes}
+        onChange={e => onUpdate(seg.id, { durationMinutes: Number(e.target.value) || 0 })}
+      />
+      <span className="opacity-80 py-1 pr-2">m</span>
+      <button onClick={() => onDelete(seg.id)} className="p-1.5 border-l border-dashed hover:bg-black/5" style={{ borderColor: themeColor }}>
+        <Trash2 size={12} />
+      </button>
+    </div>
+  );
 }
 
 function SortableRow({ 
@@ -34,11 +93,18 @@ function SortableRow({
   endStr: string,
   isActive: boolean
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: period.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: period.id,
+    data: {
+      type: 'Period',
+      period
+    }
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   const handleSegmentUpdate = (segmentId: string, updates: Partial<Segment>) => {
@@ -132,37 +198,18 @@ function SortableRow({
 
       {/* Segments */}
       <div className="flex-1 p-3 flex flex-wrap gap-2 content-start overflow-auto">
-        {(period.segments || []).map(seg => (
-          <div key={seg.id} className="flex items-center text-xs uppercase border border-dashed" style={{ borderColor: seg.color || period.color || themeColor, color: seg.color || period.color || themeColor }}>
-            <div className="p-1 cursor-move opacity-50 px-2 border-r border-dashed" style={{ borderColor: seg.color || period.color || themeColor }}>
-              <GripVertical size={12} />
-            </div>
-            <div className="px-1 border-r border-dashed" style={{ borderColor: seg.color || period.color || themeColor }}>
-              <input 
-                type="color" 
-                value={seg.color || period.color || themeColor} 
-                onChange={e => handleSegmentUpdate(seg.id, { color: e.target.value })} 
-                className="w-4 h-4 p-0 border-none cursor-pointer bg-transparent" 
-                title="Segment Color"
-              />
-            </div>
-            <input 
-              className="bg-transparent border-none outline-none font-bold w-24 p-1 px-2"
-              value={seg.name}
-              onChange={e => handleSegmentUpdate(seg.id, { name: e.target.value })}
+        <SortableContext items={(period.segments || []).map(s => s.id)} strategy={horizontalListSortingStrategy}>
+          {(period.segments || []).map(seg => (
+            <SortableSegment 
+              key={seg.id}
+              seg={seg}
+              periodColor={period.color}
+              themeColor={themeColor}
+              onUpdate={handleSegmentUpdate}
+              onDelete={handleDeleteSegment}
             />
-            <input 
-              type="number"
-              className="bg-transparent border-none outline-none text-right w-10 p-1 opacity-80"
-              value={seg.durationMinutes}
-              onChange={e => handleSegmentUpdate(seg.id, { durationMinutes: Number(e.target.value) || 0 })}
-            />
-            <span className="opacity-80 py-1 pr-2">m</span>
-            <button onClick={() => handleDeleteSegment(seg.id)} className="p-1.5 border-l border-dashed hover:bg-black/5" style={{ borderColor: themeColor }}>
-              <Trash2 size={12} />
-            </button>
-          </div>
-        ))}
+          ))}
+        </SortableContext>
         
         <button 
           onClick={handleAddSegment}
@@ -192,12 +239,95 @@ export function Spreadsheet({ periods, onUpdatePeriods, startTime, themeColor, a
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeType = active.data.current?.type;
+    const overType = over.data.current?.type;
+
+    if (activeType !== 'Segment') return;
+
+    const activeSegmentId = active.id;
+    const overId = over.id;
+
+    // Find the periods containing these segments
+    const activePeriodIndex = periods.findIndex(p => p.segments?.find(s => s.id === activeSegmentId));
+    let overPeriodIndex = periods.findIndex(p => p.segments?.find(s => s.id === overId));
+    
+    // If we're dragging over an empty period, over.id will be the period's id
+    if (overPeriodIndex === -1 && overType === 'Period') {
+       overPeriodIndex = periods.findIndex(p => p.id === overId);
+    }
+
+    if (activePeriodIndex === -1 || overPeriodIndex === -1) return;
+    if (activePeriodIndex === overPeriodIndex) return; // handled in drag end for same period
+
+    // moving from one period to another
+    const newPeriods = [...periods];
+    const activePeriod = { ...newPeriods[activePeriodIndex] };
+    const overPeriod = { ...newPeriods[overPeriodIndex] };
+
+    const activeSegmentIndex = (activePeriod.segments || []).findIndex(s => s.id === activeSegmentId);
+    let overSegmentIndex = (overPeriod.segments || []).findIndex(s => s.id === overId);
+
+    const segment = (activePeriod.segments || [])[activeSegmentIndex];
+
+    activePeriod.segments = [...(activePeriod.segments || [])];
+    activePeriod.segments.splice(activeSegmentIndex, 1);
+
+    overPeriod.segments = [...(overPeriod.segments || [])];
+    if (overSegmentIndex === -1) {
+       overPeriod.segments.push(segment); // dropped onto empty period
+    } else {
+       // if we are dragging over an item, we usually push before or after based on pointer, but dnd-kit normally does before
+       overPeriod.segments.splice(overSegmentIndex, 0, segment);
+    }
+
+    newPeriods[activePeriodIndex] = activePeriod;
+    newPeriods[overPeriodIndex] = overPeriod;
+
+    onUpdatePeriods(newPeriods);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    if (over && active.id !== over.id) {
-      const oldIndex = periods.findIndex((p) => p.id === active.id);
-      const newIndex = periods.findIndex((p) => p.id === over.id);
-      onUpdatePeriods(arrayMove(periods, oldIndex, newIndex));
+    if (!over) return;
+
+    const activeType = active.data.current?.type;
+    const overType = over.data.current?.type;
+
+    if (activeType === 'Period' && overType === 'Period') {
+      if (active.id !== over.id) {
+        const oldIndex = periods.findIndex((p) => p.id === active.id);
+        const newIndex = periods.findIndex((p) => p.id === over.id);
+        onUpdatePeriods(arrayMove(periods, oldIndex, newIndex));
+      }
+    } else if (activeType === 'Segment') {
+      // It might be reordering within the same period
+      const activePeriodIndex = periods.findIndex(p => p.segments?.find(s => s.id === active.id));
+      
+      let overPeriodIndex = periods.findIndex(p => p.segments?.find(s => s.id === over.id));
+      if (overPeriodIndex === -1 && overType === 'Period') {
+         overPeriodIndex = periods.findIndex(p => p.id === over.id);
+      }
+
+      if (activePeriodIndex !== -1 && activePeriodIndex === overPeriodIndex) {
+        const activePeriod = periods[activePeriodIndex];
+        const oldIndex = (activePeriod.segments || []).findIndex(s => s.id === active.id);
+        const newIndex = overType === 'Period' 
+            ? (activePeriod.segments || []).length // dropping on the container appends to end
+            : (activePeriod.segments || []).findIndex(s => s.id === over.id);
+
+        if (oldIndex !== newIndex && newIndex !== -1) {
+          const newPeriods = [...periods];
+          newPeriods[activePeriodIndex] = {
+            ...activePeriod,
+            segments: arrayMove(activePeriod.segments || [], oldIndex, newIndex)
+          };
+          onUpdatePeriods(newPeriods);
+        }
+      }
     }
   };
 
@@ -261,7 +391,7 @@ export function Spreadsheet({ periods, onUpdatePeriods, startTime, themeColor, a
 
       {/* Rows */}
       <div className="flex-1 overflow-auto bg-[#fafafa]">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           <SortableContext items={periods.map(p => p.id)} strategy={verticalListSortingStrategy}>
             {periods.map((period, index) => (
               <SortableRow 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, Save, Volume2, Mic, VolumeX, Clock, LayoutGrid, X, Play, Pause, RotateCcw, SkipForward, SkipBack, Plus, Circle, Minus, Maximize } from 'lucide-react';
+import { Settings, Save, Volume2, Mic, VolumeX, Clock, LayoutGrid, X, Play, Pause, RotateCcw, SkipForward, SkipBack, Plus, Circle, Minus, Maximize, Heart } from 'lucide-react';
 import { AppState, WindowState, Period, Segment, AudioMode, TimingMode } from './types';
 import { saveStateToUrl, loadStateFromUrl, cn, getPeriodDuration } from './utils';
 import { Window } from './components/Window';
@@ -14,6 +14,7 @@ import { format, differenceInMilliseconds, addMinutes, isAfter, isBefore } from 
 const defaultTheme = '#FF8DA1'; // That 90s pink
 const defaultState: AppState = {
   themeColor: defaultTheme,
+  panelsThemeColor: defaultTheme,
   uiTitle: 'TEE BB SYSTEM',
   brandLogo: '',
   timingMode: 'wall',
@@ -323,8 +324,20 @@ export default function App() {
             <Clock size={20} style={{ color: themeColor }} />
           )}
           <span className="hidden md:inline">{state.uiTitle || 'SYSTEM VISUALIZER'}</span>
+          <button 
+            onClick={() => updateState(s => ({ ...s, mainFocusMode: !s.mainFocusMode }))}
+            className="p-1 hover:bg-black/5 rounded"
+            title="Toggle Focus Mode"
+          >
+            <Heart 
+              size={16} 
+              fill={state.mainFocusMode ? themeColor : 'transparent'} 
+              color={state.mainFocusMode ? themeColor : '#ccc'} 
+            />
+          </button>
         </div>
         
+        {!state.mainFocusMode && (
         <div className="flex items-center gap-3 sm:gap-6">
           <div className="flex items-center gap-2">
             <select
@@ -379,6 +392,23 @@ export default function App() {
                   min="0.5" max="5" step="0.1" 
                   value={state.windows.clock?.zoom || 1}
                   onChange={(e) => updateWindow('clock', { zoom: parseFloat(e.target.value) })}
+                  className="w-16 sm:w-20 cursor-pointer accent-black" 
+                />
+                <Circle size={14} style={{ color: themeColor }} className="ml-2" />
+                <input 
+                  type="range" 
+                  min={350} max={typeof window !== 'undefined' ? Math.min(window.innerWidth, window.innerHeight - 150) : 1000} step={10} 
+                  value={parseFloat(String(state.windows.timer?.width)) || 500}
+                  onChange={(e) => {
+                    const newSize = parseFloat(e.target.value);
+                    const oldSize = parseFloat(String(state.windows.timer?.width)) || 500;
+                    const diff = newSize - oldSize;
+                    updateWindow('timer', { 
+                        width: newSize, height: newSize,
+                        x: (state.windows.timer?.x || 0) - diff / 2,
+                        y: (state.windows.timer?.y || 0) - diff / 2
+                    });
+                  }}
                   className="w-16 sm:w-20 cursor-pointer accent-black" 
                 />
               </div>
@@ -456,6 +486,23 @@ export default function App() {
                   onChange={(e) => updateWindow('clock', { zoom: parseFloat(e.target.value) })}
                   className="w-16 sm:w-20 cursor-pointer accent-black" 
                 />
+                <Circle size={14} style={{ color: themeColor }} className="ml-2" />
+                <input 
+                  type="range" 
+                  min={350} max={typeof window !== 'undefined' ? Math.min(window.innerWidth, window.innerHeight - 150) : 1000} step={10} 
+                  value={parseFloat(String(state.windows.timer?.width)) || 500}
+                  onChange={(e) => {
+                    const newSize = parseFloat(e.target.value);
+                    const oldSize = parseFloat(String(state.windows.timer?.width)) || 500;
+                    const diff = newSize - oldSize;
+                    updateWindow('timer', { 
+                        width: newSize, height: newSize,
+                        x: (state.windows.timer?.x || 0) - diff / 2,
+                        y: (state.windows.timer?.y || 0) - diff / 2
+                    });
+                  }}
+                  className="w-16 sm:w-20 cursor-pointer accent-black" 
+                />
               </div>
             </div>
           )}
@@ -489,18 +536,20 @@ export default function App() {
 
           <div className="flex items-center gap-1">
             <input 
-              type="text"
-              value={state.themeColor}
-              onChange={e => updateState(s => ({ ...s, themeColor: e.target.value }))}
-              className="w-20 bg-transparent border-2 outline-none px-2 py-1 text-xs text-center font-bold shadow-[2px_2px_0_rgba(0,0,0,0.1)] hidden lg:block"
-              style={{ borderColor: themeColor, color: themeColor }}
-            />
-            <input 
               type="color" 
               value={state.themeColor}
               onChange={e => updateState(s => ({ ...s, themeColor: e.target.value }))}
               className="w-8 h-8 p-0 border-2 rounded-none outline-none cursor-pointer shadow-[2px_2px_0_rgba(0,0,0,0.1)]"
               style={{ borderColor: themeColor }}
+              title="Main Theme Color"
+            />
+            <input 
+              type="text"
+              value={state.themeColor}
+              onChange={e => updateState(s => ({ ...s, themeColor: e.target.value }))}
+              className="w-20 bg-transparent border-2 outline-none px-2 py-1 text-xs text-center font-bold shadow-[2px_2px_0_rgba(0,0,0,0.1)] hidden lg:block"
+              style={{ borderColor: themeColor, color: themeColor }}
+              title="Main Theme Hex"
             />
           </div>
 
@@ -550,13 +599,14 @@ export default function App() {
             <Save size={16} /> <span className="hidden xl:inline">Bookmark State</span>
           </button>
         </div>
+        )}
       </div>
 
       {/* Main Content Area - Split Layout */}
       <div className="flex-1 flex flex-col min-h-0 relative">
          
          {/* Top: Timer / Floating Canvas */}
-         <div className="flex-1 relative overflow-hidden bg-retro-bg p-4 flex flex-col">
+         <div id="desktop-area" className="flex-1 relative overflow-hidden bg-retro-bg p-4 flex flex-col">
 
 
             {/* We maintain react-rnd for the user to still drag sub-views if they want, 
@@ -570,16 +620,20 @@ export default function App() {
               themeColor={themeColor}
               chromeless={true}
             >
-              <VisualTimer 
-                currentPeriod={currentPeriod}
-                activeSegment={currentSegment}
-                nextPeriod={nextPeriod}
-                timeRemainingMs={timeRemainingMs}
-                totalDurationMs={currentTotalDurationMs}
-                periodRemainingMs={periodRemainingMs}
-                periodTotalMs={periodTotalMs}
-                themeColor={themeColor}
-              />
+              <div 
+                className="w-full h-full flex flex-col items-center justify-center transform-gpu origin-center" 
+              >
+                <VisualTimer 
+                  currentPeriod={currentPeriod}
+                  activeSegment={currentSegment}
+                  nextPeriod={nextPeriod}
+                  timeRemainingMs={timeRemainingMs}
+                  totalDurationMs={currentTotalDurationMs}
+                  periodRemainingMs={periodRemainingMs}
+                  periodTotalMs={periodTotalMs}
+                  themeColor={themeColor}
+                />
+              </div>
             </Window>
 
             <Window
@@ -587,14 +641,25 @@ export default function App() {
               title="ALL PERIODS"
               state={state.windows.summary}
               onUpdate={updateWindow}
-              themeColor={themeColor}
+              themeColor={state.summaryThemeColor || themeColor}
+              titleColor="black"
               headerActions={
                 <>
+                  <input 
+                    type="color" 
+                    value={state.summaryThemeColor || themeColor}
+                    onChange={e => updateState(s => ({ ...s, summaryThemeColor: e.target.value }))}
+                    className="w-4 h-4 p-0 border rounded-none outline-none cursor-pointer hidden md:block"
+                    style={{ borderColor: state.summaryThemeColor || themeColor }}
+                    title="Summary Theme Color"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
                   <button className="p-1 hover:bg-black/5" onClick={() => updateWindow('summary', { zoom: Math.max(0.5, (state.windows.summary.zoom || 1) - 0.1) })}>
-                    <Minus size={14} style={{ color: themeColor }} />
+                    <Minus size={14} style={{ color: "black" }} />
                   </button>
                   <button className="p-1 hover:bg-black/5" onClick={() => updateWindow('summary', { zoom: Math.min(3, (state.windows.summary.zoom || 1) + 0.1) })}>
-                    <Plus size={14} style={{ color: themeColor }} />
+                    <Plus size={14} style={{ color: "black" }} />
                   </button>
                 </>
               }
@@ -610,17 +675,28 @@ export default function App() {
 
             <Window
               id="segments"
-              title="SUB-TIMER SUMMARY"
+              title="Timers"
               state={state.windows.segments || { id: 'segments', x: 850, y: 50, width: 350, height: 250, isOpen: true, zIndex: 31, zoom: 1 }}
               onUpdate={updateWindow}
-              themeColor={themeColor}
+              themeColor={state.segmentsThemeColor || themeColor}
+              titleColor="black"
               headerActions={
                 <>
+                  <input 
+                    type="color" 
+                    value={state.segmentsThemeColor || themeColor}
+                    onChange={e => updateState(s => ({ ...s, segmentsThemeColor: e.target.value }))}
+                    className="w-4 h-4 p-0 border rounded-none outline-none cursor-pointer hidden md:block"
+                    style={{ borderColor: state.segmentsThemeColor || themeColor }}
+                    title="Segments Theme Color"
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  />
                   <button className="p-1 hover:bg-black/5" onClick={() => updateWindow('segments', { zoom: Math.max(0.5, (state.windows.segments?.zoom || 1) - 0.1) })}>
-                    <Minus size={14} style={{ color: themeColor }} />
+                    <Minus size={14} style={{ color: "black" }} />
                   </button>
                   <button className="p-1 hover:bg-black/5" onClick={() => updateWindow('segments', { zoom: Math.min(3, (state.windows.segments?.zoom || 1) + 0.1) })}>
-                    <Plus size={14} style={{ color: themeColor }} />
+                    <Plus size={14} style={{ color: "black" }} />
                   </button>
                 </>
               }
