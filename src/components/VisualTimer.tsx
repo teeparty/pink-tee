@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Period, Segment } from '../types';
 import { Star } from 'lucide-react';
+import catVideo from '../assets/catlong.mp4';
 
 interface VisualTimerProps {
   currentPeriod: Period | null;
@@ -72,7 +73,7 @@ export function VisualTimer({
               We'll use a video tag assuming it's an mp4. */}
           <div className="flex items-center justify-center h-48 sm:h-64 mb-4">
              <video 
-               src="/catlong.mp4?v=2" 
+               src={catVideo}
                autoPlay 
                loop 
                muted 

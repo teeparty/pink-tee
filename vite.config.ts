@@ -2,14 +2,19 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import {viteSingleFile} from 'vite-plugin-singlefile';
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
+  // `npm run build:single` builds the whole app (JS, CSS, fonts, video) into one
+  // self-contained HTML file that can be opened by double-clicking it, no server needed.
+  const singleFile = mode === 'singlefile';
   return {
     // GitHub Pages serves this project at https://teeparty.github.io/pink-tee/,
     // so production assets must be referenced from the /pink-tee/ subpath.
     // Local dev (`vite`/serve) stays at the root.
-    base: command === 'build' ? '/pink-tee/' : '/',
-    plugins: [react(), tailwindcss()],
+    base: singleFile ? './' : command === 'build' ? '/pink-tee/' : '/',
+    plugins: [react(), tailwindcss(), singleFile && viteSingleFile()],
+    build: singleFile ? { outDir: 'dist-single', copyPublicDir: false } : undefined,
     // react-draggable (used by react-rnd) references `process.env.DRAGGABLE_DEBUG`
     // in its drag-start path, which throws "process is not defined" in the browser
     // and prevents windows from being dragged. Replace it with a literal so the
