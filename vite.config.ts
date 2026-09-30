@@ -4,15 +4,14 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import {viteSingleFile} from 'vite-plugin-singlefile';
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ mode }) => {
   // `npm run build:single` builds the whole app (JS, CSS, fonts, video) into one
   // self-contained HTML file that can be opened by double-clicking it, no server needed.
   const singleFile = mode === 'singlefile';
   return {
-    // GitHub Pages serves this project at https://teeparty.github.io/pink-tee/,
-    // so production assets must be referenced from the /pink-tee/ subpath.
-    // Local dev (`vite`/serve) stays at the root.
-    base: singleFile ? './' : command === 'build' ? '/pink-tee/' : '/',
+    // GitHub Pages serves this project at the root of the custom domain
+    // https://bettereducator.org/, so assets are referenced from the root.
+    base: singleFile ? './' : '/',
     plugins: [react(), tailwindcss(), singleFile && viteSingleFile()],
     build: singleFile ? { outDir: 'dist-single', copyPublicDir: false } : undefined,
     // react-draggable (used by react-rnd) references `process.env.DRAGGABLE_DEBUG`

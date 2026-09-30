@@ -1,4 +1,4 @@
-Site is deployed to: https://teeparty.github.io/pink-tee/
+Site is deployed to: https://bettereducator.org/
 
 # Run and deploy your AI Studio app
 
