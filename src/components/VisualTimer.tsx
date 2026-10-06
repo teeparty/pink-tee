@@ -133,10 +133,19 @@ export function VisualTimer({
              {(() => {
                if (currentPeriod.segments && currentPeriod.segments.length > 0) {
                  const numSegments = currentPeriod.segments.length;
-                 
+                 // Size each arc by its share of the period's total duration
+                 const segDurations = currentPeriod.segments.map(s => Math.max(0, s.durationMinutes || 0));
+                 const totalSegMinutes = segDurations.reduce((sum, d) => sum + d, 0);
+                 let elapsedSegMinutes = 0;
+
                  return currentPeriod.segments.map((seg, i) => {
-                   const startRatio = i / numSegments;
-                   const endRatio = (i + 1) / numSegments;
+                   let startRatio = i / numSegments;
+                   let endRatio = (i + 1) / numSegments;
+                   if (totalSegMinutes > 0) {
+                     startRatio = elapsedSegMinutes / totalSegMinutes;
+                     elapsedSegMinutes += segDurations[i];
+                     endRatio = elapsedSegMinutes / totalSegMinutes;
+                   }
                    const segColor = seg.color || periodColor;
 
                    const bgLengthRatio = Math.max(0, (endRatio - startRatio) - gapRatio);
