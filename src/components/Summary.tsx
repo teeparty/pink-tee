@@ -1,5 +1,6 @@
 import React from 'react';
 import { Period } from '../types';
+import { formatCountdown } from '../utils';
 
 interface SummaryProps {
   periods: Period[];
@@ -22,13 +23,6 @@ export function Summary({ periods, activePeriodId, themeColor, periodRemainingMs
     );
   }
 
-  const formatMs = (ms: number) => {
-    const totalSeconds = Math.floor(Math.abs(ms) / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${ms < 0 ? '-' : ''}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
   return (
     <div className="!flex !flex-col !flex-1 min-h-0 p-0 relative bg-white">
       {periodRemainingMs != null && (
@@ -40,7 +34,7 @@ export function Summary({ periods, activePeriodId, themeColor, periodRemainingMs
             Time Left In the Period
           </div>
           <div className="font-pixel text-4xl tracking-widest font-black text-black flex items-center gap-2 drop-shadow-sm">
-            {formatMs(periodRemainingMs)}
+            {formatCountdown(periodRemainingMs)}
           </div>
         </div>
       )}

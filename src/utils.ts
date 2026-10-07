@@ -14,6 +14,13 @@ export function getPeriodDuration(period: Period): number {
   return period.durationMinutes || 0;
 }
 
+export function formatCountdown(ms: number): string {
+  const totalSeconds = Math.floor(Math.abs(ms) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${ms < 0 ? '-' : ''}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}
+
 export function saveStateToUrl(state: AppState) {
   const jsonString = JSON.stringify(state);
   const compressed = LZString.compressToEncodedURIComponent(jsonString);

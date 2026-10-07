@@ -1,32 +1,56 @@
-import React, { useState } from 'react';
-import { Period, Segment } from '../types';
-import { Star } from 'lucide-react';
+import React from 'react';
+import { ClockSettings, Period, Segment } from '../types';
 import catVideo from '../assets/catlong.mp4';
+import { formatCountdown } from '../utils';
+import { ClockMenu } from './ClockMenu';
+
+const HOUR_MS = 60 * 60 * 1000;
+// Gap between adjacent segments, as a fraction of the dial
+const SEGMENT_GAP = 0.005;
+const HAND_COLOR = '#333333';
+// Ring labels use Space Mono, which is monospaced with a 0.612em advance
+const LABEL_CHAR_WIDTH_EM = 0.62;
+
+// White or the hand color, whichever contrasts better against a #rrggbb background
+function readableTextColor(background: string) {
+  const match = /^#([0-9a-f]{6})$/i.exec(background);
+  if (!match) return HAND_COLOR;
+  const rgb = parseInt(match[1], 16);
+  const luminance = [rgb >> 16, (rgb >> 8) & 255, rgb & 255]
+    .map(c => c / 255)
+    .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+  const handLuminance = 0.0331;
+  return 1.05 / (luminance + 0.05) > (luminance + 0.05) / (handLuminance + 0.05) ? '#ffffff' : HAND_COLOR;
+}
 
 interface VisualTimerProps {
   currentPeriod: Period | null;
   activeSegment: Segment | null;
   nextPeriod: Period | null;
+  now: Date;
   timeRemainingMs: number;
   totalDurationMs: number;
   periodRemainingMs?: number;
   periodTotalMs?: number;
   themeColor: string;
+  clock: ClockSettings;
+  onClockChange: (partial: Partial<ClockSettings>) => void;
 }
 
 export function VisualTimer({ 
   currentPeriod, 
   activeSegment,
-  nextPeriod, 
-  timeRemainingMs, 
+  nextPeriod,
+  now,
+  timeRemainingMs,
   totalDurationMs, 
   periodRemainingMs,
   periodTotalMs,
-  themeColor 
+  themeColor,
+  clock,
+  onClockChange
 }: VisualTimerProps) {
-  const [ringThickness, setRingThickness] = useState(150);
-  const [textScale, setTextScale] = useState(1.0);
-
   if (!currentPeriod || totalDurationMs <= 0 || !periodTotalMs) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center h-full w-full opacity-50 uppercase tracking-widest text-lg font-bold">
@@ -35,20 +59,10 @@ export function VisualTimer({
     );
   }
 
-  // Format time remaining
-  const totalSeconds = Math.floor(timeRemainingMs / 1000);
-  const minutes = Math.floor(Math.abs(totalSeconds) / 60);
-  const seconds = Math.abs(totalSeconds) % 60;
-  const formattedTime = `${totalSeconds < 0 ? '-' : ''}${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  
-  const isSegmentActive = activeSegment !== null;
-  const mainTitle = isSegmentActive ? activeSegment.name : currentPeriod.name;
-  const subTitle = isSegmentActive ? `PART OF ${currentPeriod.name.toUpperCase()}` : (currentPeriod.type === 'transition' ? 'PASSING' : 'CURRENT PERIOD');
+  const formattedTime = formatCountdown(timeRemainingMs);
 
   const activeColor = activeSegment?.color || currentPeriod?.color || themeColor;
   const periodColor = currentPeriod?.color || themeColor;
-
-  const hasSegment = isSegmentActive;
 
   // Render variables for crisp concentric rings without overlaps
   const VIEWBOX_SIZE = 1000;
@@ -109,192 +123,190 @@ export function VisualTimer({
     );
   }
 
-  // Single Ring
+  // Clock face: the ring is a 60-minute dial swept by the minute hand
   const ringRadius = 400;
-  const ringStroke = ringThickness;
-  const circumference = ringRadius * 2 * Math.PI;
-  const gapRatio = currentPeriod.segments && currentPeriod.segments.length > 1 ? 0.005 : 0;
+  const ringStroke = clock.ringThickness;
+  const innerRadius = ringRadius - (ringStroke / 2);
+  // Segments are dashes along a stroked circle. In pie mode the stroke runs from the center to
+  // the ring's outer edge, so the same dashes become wedges.
+  const isPie = clock.style === 'pie';
+  const fillRadius = isPie ? (ringRadius + ringStroke / 2) / 2 : ringRadius;
+  const fillStroke = isPie ? ringRadius + ringStroke / 2 : ringStroke;
+  const circumference = fillRadius * 2 * Math.PI;
+  const tickOuterRadius = innerRadius - 12;
+  const numeralFontSize = tickOuterRadius * 0.17;
+  // Just inside the hour ticks, which are 40 long
+  const numeralRadius = tickOuterRadius - 58 - numeralFontSize * 0.45;
+  const labelFontSize = Math.min(ringStroke * 0.3 * clock.labelScale, ringStroke * 0.8);
 
-  // Calculate strict safe box size using Math.sqrt(2) to fit perfectly in inner circle
-  const innerRadius = ringRadius - (ringThickness / 2);
-  const maxBoxSize = Math.max(0, innerRadius * 1.414 - 10); // slightly smaller for safety
+  // Map a wall-clock time to a dial position (in turns from 12 o'clock), relative to the minute hand
+  const nowMs = now.getTime();
+  const nowDial = (now.getMinutes() * 60000 + now.getSeconds() * 1000 + now.getMilliseconds()) / HOUR_MS;
+  const toDial = (t: number) => nowDial + (t - nowMs) / HOUR_MS;
 
-  // Star boundaries
-  const outerLeftEdge = CENTER - ringRadius - (ringThickness / 2);
-  const innerRightEdge = CENTER + ringRadius - (ringThickness / 2);
+  const hourAngle = ((now.getHours() % 12) + nowDial) * 30;
+  const minuteAngle = nowDial * 360;
+  const secondAngle = now.getSeconds() * 6;
+
+  // Lay each segment out at its actual clock time. The dial holds one hour: time left
+  // runs ahead of the minute hand, and elapsed time fills whatever dial is left behind it.
+  const periodEndMs = nowMs + periodRemainingMs;
+  const periodStartMs = periodEndMs - periodTotalMs;
+  const aheadEndMs = Math.min(periodEndMs, nowMs + HOUR_MS);
+  const behindStartMs = aheadEndMs - HOUR_MS;
+
+  const segments = currentPeriod.segments && currentPeriod.segments.length > 0
+    ? currentPeriod.segments
+    : [{ id: currentPeriod.id, name: currentPeriod.name, durationMinutes: periodTotalMs / 60000, color: currentPeriod.color }];
+
+  type Arc = { key: string; color: string; start: number; length: number; elapsed: boolean; label?: string };
+
+  // Where a label runs along an arc, and how many characters fit with half an em of padding at each end
+  const labelLayout = (arc: Arc) => {
+    const mid = arc.start + arc.length / 2;
+    const midTurn = mid - Math.floor(mid);
+    // Run labels on the bottom half counterclockwise so they read left to right, not upside down
+    const flip = midTurn > 0.25 && midTurn < 0.75;
+    // Text sits on its baseline, so shift it by half the cap height to center it in the ring
+    const r = ringRadius + (flip ? 0.35 : -0.35) * labelFontSize;
+    const maxChars = Math.floor((r * arc.length * 2 * Math.PI - labelFontSize) / (labelFontSize * LABEL_CHAR_WIDTH_EM));
+    return { flip, r, maxChars };
+  };
+
+  const arcs: Arc[] = [];
+  let segStartMs = periodStartMs;
+  for (const seg of segments) {
+    const segEndMs = segStartMs + Math.max(0, seg.durationMinutes || 0) * 60000;
+    const makeArc = (fromMs: number, toMs: number, elapsed: boolean): Arc | null => {
+      // Gap at every boundary except the minute hand, plus where the hour wraps back to it
+      const start = toDial(fromMs) + (fromMs !== nowMs ? SEGMENT_GAP : 0);
+      const end = toDial(toMs) - (toMs === nowMs + HOUR_MS ? SEGMENT_GAP : 0);
+      if (end <= start) return null;
+      return { key: `${seg.id}-${elapsed ? 'elapsed' : 'left'}`, color: seg.color || periodColor, start, length: end - start, elapsed };
+    };
+    const elapsedArc = makeArc(Math.max(segStartMs, behindStartMs), Math.min(segEndMs, nowMs), true);
+    const leftArc = makeArc(Math.max(segStartMs, nowMs), Math.min(segEndMs, aheadEndMs), false);
+    // Label each segment once: on the time it has left, unless more of the name fits on its elapsed time
+    const fit = (arc: Arc | null) => (arc ? Math.min(labelLayout(arc).maxChars, seg.name.length) : -1);
+    const labeledArc = fit(elapsedArc) > fit(leftArc) ? elapsedArc : leftArc;
+    if (labeledArc) labeledArc.label = seg.name;
+    arcs.push(...[elapsedArc, leftArc].filter((arc): arc is Arc => arc !== null));
+    segStartMs = segEndMs;
+  }
+
+  // Curved label along an arc, centered in the ring, cut short with an ellipsis if it doesn't fit
+  const renderLabel = (arc: Arc) => {
+    const { flip, r, maxChars } = labelLayout(arc);
+    const name = (arc.label || '').toUpperCase();
+    const text = name.length <= maxChars ? name : maxChars >= 4 ? `${name.slice(0, maxChars - 1).trimEnd()}…` : '';
+    if (!text) return null;
+
+    const point = (turn: number) => `${CENTER + r * Math.sin(turn * 2 * Math.PI)} ${CENTER - r * Math.cos(turn * 2 * Math.PI)}`;
+    const end = arc.start + arc.length;
+    const largeArc = arc.length > 0.5 ? 1 : 0;
+    const d = flip
+      ? `M ${point(end)} A ${r} ${r} 0 ${largeArc} 0 ${point(arc.start)}`
+      : `M ${point(arc.start)} A ${r} ${r} 0 ${largeArc} 1 ${point(end)}`;
+    const pathId = `clock-label-${arc.key}`;
+    return (
+      <g key={pathId}>
+        <path id={pathId} d={d} fill="none" />
+        <text
+          className="font-mono font-bold"
+          fontSize={labelFontSize}
+          fill={arc.elapsed ? HAND_COLOR : readableTextColor(arc.color)}
+          fillOpacity={arc.elapsed ? 0.5 : 1}
+        >
+          <textPath href={`#${pathId}`} startOffset="50%" textAnchor="middle">{text}</textPath>
+        </text>
+      </g>
+    );
+  };
+
+  // Ticks and numerals sit on top of the wedges in pie mode, so match them to the segment underneath
+  const markColorAt = (turn: number) => {
+    if (!isPie) return HAND_COLOR;
+    const arc = arcs.find(a => !a.elapsed && ((turn - a.start) % 1 + 1) % 1 < a.length);
+    return arc ? readableTextColor(arc.color) : HAND_COLOR;
+  };
 
   return (
     <div className="flex-1 flex w-full h-full relative items-center justify-center p-4 timer-drag-handle cursor-move">
+      <ClockMenu clock={clock} onChange={onClockChange} themeColor={themeColor} />
       <svg viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`} className="w-full h-full drop-shadow-md overflow-visible pointer-events-none">
             
          {/* Rings Group: Rotated -90deg so it starts at 12 o'clock */}
          <g transform={`rotate(-90 ${CENTER} ${CENTER})`}>
-             {/* Ring Logic */}
-             {(() => {
-               if (currentPeriod.segments && currentPeriod.segments.length > 0) {
-                 const numSegments = currentPeriod.segments.length;
-                 // Size each arc by its share of the period's total duration
-                 const segDurations = currentPeriod.segments.map(s => Math.max(0, s.durationMinutes || 0));
-                 const totalSegMinutes = segDurations.reduce((sum, d) => sum + d, 0);
-                 let elapsedSegMinutes = 0;
-
-                 return currentPeriod.segments.map((seg, i) => {
-                   let startRatio = i / numSegments;
-                   let endRatio = (i + 1) / numSegments;
-                   if (totalSegMinutes > 0) {
-                     startRatio = elapsedSegMinutes / totalSegMinutes;
-                     elapsedSegMinutes += segDurations[i];
-                     endRatio = elapsedSegMinutes / totalSegMinutes;
-                   }
-                   const segColor = seg.color || periodColor;
-
-                   const bgLengthRatio = Math.max(0, (endRatio - startRatio) - gapRatio);
-                   
-                   let isPast = false;
-                   let isFuture = false;
-                   let isActive = false;
-                   let activeRatio = 0;
-
-                   if (isSegmentActive && activeSegment?.id === seg.id) {
-                     isActive = true;
-                     activeRatio = totalDurationMs > 0 ? 1 - (timeRemainingMs / totalDurationMs) : 0;
-                   } else {
-                     const activeIdx = currentPeriod.segments.findIndex(s => s.id === activeSegment?.id);
-                     if (activeIdx !== -1) {
-                       if (i < activeIdx) isPast = true;
-                       if (i > activeIdx) isFuture = true;
-                     } else {
-                       isFuture = true;
-                     }
-                   }
-
-                   let fgStartRatio = startRatio;
-                   let fgLengthRatio = 0;
-
-                   if (isFuture) {
-                     fgLengthRatio = bgLengthRatio;
-                   } else if (isPast) {
-                     fgLengthRatio = 0;
-                   } else if (isActive) {
-                     fgStartRatio = startRatio + (activeRatio * bgLengthRatio);
-                     fgLengthRatio = bgLengthRatio * (1 - activeRatio);
-                   }
-
-                   return (
-                     <g key={seg.id}>
-                        {/* Background segment */}
-                        {bgLengthRatio > 0 && (
-                          <circle 
-                            cx={CENTER} cy={CENTER} r={ringRadius} 
-                            stroke={segColor} strokeWidth={ringStroke} fill="none" strokeOpacity={0.15}
-                            strokeDasharray={`${Math.max(0, bgLengthRatio * circumference)} ${circumference}`}
-                            strokeDashoffset={-(startRatio * circumference)}
-                            className="transition-all duration-1000 ease-linear"
-                            strokeLinecap="butt"
-                          />
-                        )}
-                        {/* Foreground segment */}
-                        {fgLengthRatio > 0 && (
-                          <circle 
-                            cx={CENTER} cy={CENTER} r={ringRadius} 
-                            stroke={segColor} strokeWidth={ringStroke} fill="none"
-                            strokeDasharray={`${Math.max(0, fgLengthRatio * circumference)} ${circumference}`}
-                            strokeDashoffset={-(fgStartRatio * circumference)}
-                            className="transition-all duration-1000 ease-linear drop-shadow-sm"
-                            strokeLinecap="butt"
-                          />
-                        )}
-                     </g>
-                   );
-                 });
-               } else {
-                 // Single solid ring
-                 const globalRatio = periodTotalMs && periodTotalMs > 0 ? Math.max(0, Math.min(1, 1 - (periodRemainingMs / periodTotalMs))) : 0;
-                 const fgLengthRatio = 1 - globalRatio;
-                 
-                 return (
-                   <g>
-                     <circle cx={CENTER} cy={CENTER} r={ringRadius} stroke={periodColor} strokeWidth={ringStroke} fill="none" strokeOpacity={0.15} />
-                     {fgLengthRatio > 0 && (
-                       <circle 
-                         cx={CENTER} cy={CENTER} r={ringRadius} 
-                         stroke={periodColor} strokeWidth={ringStroke} fill="none" 
-                         strokeDasharray={`${Math.max(0, fgLengthRatio * circumference)} ${circumference}`} 
-                         strokeDashoffset={-(globalRatio * circumference)}
-                         className="transition-all duration-1000 ease-linear drop-shadow-sm" 
-                         strokeLinecap="butt"
-                       />
-                     )}
-                   </g>
-                 );
-               }
-             })()}
+             <circle cx={CENTER} cy={CENTER} r={fillRadius} stroke={periodColor} strokeWidth={fillStroke} fill="none" strokeOpacity={0.08} />
+             {arcs.map(arc => (
+               <circle 
+                 key={arc.key}
+                 cx={CENTER} cy={CENTER} r={fillRadius} 
+                 stroke={arc.color} strokeWidth={fillStroke} fill="none" strokeOpacity={arc.elapsed ? 0.25 : 1}
+                 // Dash pattern repeats every circumference, so an arc can wrap past 12 o'clock
+                 strokeDasharray={`${arc.length * circumference} ${(1 - arc.length) * circumference}`}
+                 strokeDashoffset={-(arc.start * circumference)}
+                 className={arc.elapsed ? undefined : 'drop-shadow-sm'}
+                 strokeLinecap="butt"
+               />
+             ))}
          </g>
 
-         {/* Embedded HTML Text perfectly centered within the ring. */}
-         <foreignObject x={CENTER - maxBoxSize / 2} y={CENTER - maxBoxSize / 2} width={maxBoxSize} height={maxBoxSize}>
-           <div className="flex flex-col items-center justify-center text-center w-full h-full p-0 pointer-events-none overflow-hidden">
-              <div className="font-bold tracking-widest opacity-80 uppercase font-mono mb-4" style={{ color: activeColor, fontSize: `${maxBoxSize * 0.045 * textScale}px` }}>
-                {subTitle}
-              </div>
-              <div className="leading-[1.1] font-bold max-w-full truncate px-4 font-mono drop-shadow-sm" style={{ color: activeColor, fontSize: `${maxBoxSize * 0.125 * textScale}px` }}>
-                {mainTitle}
-              </div>
-              
-              <div 
-                className="font-pixel tracking-widest drop-shadow-md mt-6" 
-                style={{ color: activeColor, fontSize: `${maxBoxSize * 0.23 * textScale}px` }}
-              >
-                {formattedTime}
-              </div>
-              
-              {nextPeriod && (
-                <div className="mt-12 text-center tracking-widest uppercase w-full font-bold opacity-80" style={{ color: activeColor, fontSize: `${maxBoxSize * 0.045 * textScale}px` }}>
-                  UPNEXT: <span className="opacity-90">{nextPeriod.name}</span>
-                </div>
-              )}
-           </div>
-         </foreignObject>
+         {/* Segment names along the ring */}
+         {arcs.filter(arc => arc.label).map(renderLabel)}
 
-         {/* Left Outer Star (Ring Thickness Control) */}
-         <foreignObject x={outerLeftEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible cancel">
-            <div className="flex flex-col items-center justify-start group w-full h-full pt-4">
-              <Star
-                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110 cancel"
-                fill="currentColor"
-                size={32}
-              />
-              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto cancel">
-                <input
-                  type="range" min={40} max={250} value={ringThickness}
-                  onChange={(e) => setRingThickness(Number(e.target.value))}
-                  className="w-24 cursor-pointer cancel"
-                  onPointerDown={(e) => e.stopPropagation()} 
-                  onMouseDown={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-         </foreignObject>
+         {/* Minute ticks */}
+         {Array.from({ length: 60 }, (_, i) => (
+           <line
+             key={i}
+             x1={CENTER} y1={CENTER - tickOuterRadius}
+             x2={CENTER} y2={CENTER - tickOuterRadius + (i % 5 === 0 ? 40 : 16)}
+             stroke={markColorAt(i / 60)} strokeOpacity={i % 5 === 0 ? 0.5 : 0.2} strokeWidth={i % 5 === 0 ? 8 : 3} strokeLinecap="round"
+             transform={`rotate(${i * 6} ${CENTER} ${CENTER})`}
+           />
+         ))}
 
-         {/* Right Inner Star Mirror (Text Scale Control) */}
-         <foreignObject x={innerRightEdge - 50} y={CENTER - 80} width="100" height="160" className="pointer-events-auto overflow-visible cancel">
-            <div className="flex flex-col items-center justify-start group w-full h-full pt-4">
-              <Star
-                className="text-black/10 group-hover:text-black/60 cursor-pointer drop-shadow-sm transition-all hover:scale-110 cancel"
-                fill="currentColor"
-                size={32}
-              />
-              <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded border border-gray-200 p-2 shadow-lg pointer-events-auto cancel">
-                <input
-                  type="range" min={0.5} max={3.0} step={0.1} value={textScale}
-                  onChange={(e) => setTextScale(Number(e.target.value))}
-                  className="w-24 cursor-pointer cancel"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                />
-              </div>
-            </div>
-         </foreignObject>
+         {/* Hour numerals */}
+         {Array.from({ length: 12 }, (_, i) => {
+           const hour = i + 1;
+           const angle = (hour / 12) * 2 * Math.PI;
+           return (
+             <text
+               key={hour}
+               x={CENTER + numeralRadius * Math.sin(angle)}
+               y={CENTER - numeralRadius * Math.cos(angle)}
+               className="font-mono font-bold"
+               fontSize={numeralFontSize}
+               fill={markColorAt(hour / 12)}
+               fillOpacity={0.8}
+               textAnchor="middle"
+               dominantBaseline="central"
+             >
+               {hour}
+             </text>
+           );
+         })}
+
+         {/* Clock hands, with a white outline pass first in pie mode so they stand out from the wedges */}
+         {(isPie ? [true, false] : [false]).map(outline => (
+           <g key={outline ? 'outline' : 'hands'} strokeLinecap="round">
+             {[
+               { angle: hourAngle, tail: 30, length: tickOuterRadius * 0.55, width: 24, color: HAND_COLOR },
+               { angle: minuteAngle, tail: 30, length: tickOuterRadius - 8, width: 14, color: HAND_COLOR },
+               { angle: secondAngle, tail: 60, length: tickOuterRadius - 4, width: 5, color: activeColor },
+             ].map((hand, i) => (
+               <line
+                 key={i}
+                 x1={CENTER} y1={CENTER + hand.tail} x2={CENTER} y2={CENTER - hand.length}
+                 stroke={outline ? '#ffffff' : hand.color} strokeWidth={hand.width + (outline ? 8 : 0)}
+                 transform={`rotate(${hand.angle} ${CENTER} ${CENTER})`}
+               />
+             ))}
+           </g>
+         ))}
+         {isPie && <circle cx={CENTER} cy={CENTER} r={24} fill="#ffffff" />}
+         <circle cx={CENTER} cy={CENTER} r={20} fill={HAND_COLOR} />
+         <circle cx={CENTER} cy={CENTER} r={9} fill={activeColor} />
 
       </svg>
     </div>

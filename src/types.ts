@@ -17,6 +17,12 @@ export interface Period {
   segments?: Segment[];
 }
 
+export interface ClockSettings {
+  style: 'ring' | 'pie';
+  ringThickness: number;
+  labelScale: number;
+}
+
 export interface WindowState {
   id: string;
   x: number;
@@ -50,6 +56,7 @@ export interface AppState {
   isSequentialPlaying: boolean;
   audioMode: AudioMode;
   periods: Period[];
+  clock: ClockSettings;
   windows: Record<string, WindowState>;
   pronunciations: PronunciationOverride[];
 }

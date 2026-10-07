@@ -1,14 +1,16 @@
 import React from 'react';
 import { Period } from '../types';
+import { formatCountdown } from '../utils';
 
 interface SegmentSummaryProps {
   period: Period | null;
   activeSegmentId: string | null;
+  timeRemainingMs: number;
   themeColor: string;
   zoom?: number;
 }
 
-export function SegmentSummary({ period, activeSegmentId, themeColor, zoom = 1 }: SegmentSummaryProps) {
+export function SegmentSummary({ period, activeSegmentId, timeRemainingMs, themeColor, zoom = 1 }: SegmentSummaryProps) {
   if (!period) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center h-full p-4 bg-white" style={{ color: 'black' }}>
@@ -35,6 +37,19 @@ export function SegmentSummary({ period, activeSegmentId, themeColor, zoom = 1 }
 
   return (
     <div className="!flex !flex-col !flex-1 min-h-0 bg-white">
+      {activeIndex !== -1 && (
+        <div
+          className="shrink-0 flex flex-col items-center justify-center p-4 border-b-4 mb-0 bg-white"
+          style={{ borderColor: `${themeColor}40`, zoom: zoom }}
+        >
+          <div className="uppercase tracking-widest text-sm font-black text-black mb-1">
+            Time Left In the Segment
+          </div>
+          <div className="font-pixel text-4xl tracking-widest font-black text-black flex items-center gap-2 drop-shadow-sm">
+            {formatCountdown(timeRemainingMs)}
+          </div>
+        </div>
+      )}
       <div className="!flex-1 overflow-y-auto min-h-0 pb-2">
         <div style={{ zoom: zoom }}>
           {segments.map((segment, i) => {

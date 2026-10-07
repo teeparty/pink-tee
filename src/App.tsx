@@ -35,6 +35,7 @@ const defaultState: AppState = {
     { id: '2', name: 'Passing', durationMinutes: 5, type: 'transition', segments: [] },
     { id: '3', name: 'Period 2', durationMinutes: 45, type: 'period', segments: [] },
   ],
+  clock: { style: 'ring', ringThickness: 150, labelScale: 1 },
   windows: {
     timer: { id: 'timer', x: 200, y: 50, width: 600, height: 600, isOpen: true, zIndex: 10 },
     summary: { id: 'summary', x: 20, y: 50, width: 350, height: 250, isOpen: true, zIndex: 30 },
@@ -91,6 +92,10 @@ export default function App() {
         ...resolvedState,
         isSequentialPlaying: false,
         sequentialStartMs: null,
+        clock: {
+           ...defaultState.clock,
+           ...(resolvedState.clock || {})
+        },
         windows: { 
            ...defaultState.windows, 
            ...(resolvedState.windows || {})
@@ -627,11 +632,14 @@ export default function App() {
                   currentPeriod={currentPeriod}
                   activeSegment={currentSegment}
                   nextPeriod={nextPeriod}
+                  now={currentTime}
                   timeRemainingMs={timeRemainingMs}
                   totalDurationMs={currentTotalDurationMs}
                   periodRemainingMs={periodRemainingMs}
                   periodTotalMs={periodTotalMs}
                   themeColor={themeColor}
+                  clock={state.clock}
+                  onClockChange={partial => updateState(s => ({ ...s, clock: { ...s.clock, ...partial } }))}
                 />
               </div>
             </Window>
@@ -704,6 +712,7 @@ export default function App() {
               <SegmentSummary 
                 period={currentPeriod}
                 activeSegmentId={activeSegmentId}
+                timeRemainingMs={timeRemainingMs}
                 themeColor={themeColor}
                 zoom={state.windows.segments?.zoom || 1}
               />
