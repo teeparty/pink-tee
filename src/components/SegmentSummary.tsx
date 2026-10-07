@@ -42,8 +42,8 @@ export function SegmentSummary({ period, activeSegmentId, timeRemainingMs, theme
           className="shrink-0 flex flex-col items-center justify-center p-4 border-b-4 mb-0 bg-white"
           style={{ borderColor: `${themeColor}40`, zoom: zoom }}
         >
-          <div className="uppercase tracking-widest text-sm font-black text-black mb-1">
-            Time Left In the Segment
+          <div className="uppercase tracking-widest text-sm font-black text-black mb-1 text-center">
+            Time Left In {segments[activeIndex].name || 'the Segment'}
           </div>
           <div className="font-pixel text-4xl tracking-widest font-black text-black flex items-center gap-2 drop-shadow-sm">
             {formatCountdown(timeRemainingMs)}
