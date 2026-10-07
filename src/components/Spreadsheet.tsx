@@ -15,7 +15,7 @@ interface SpreadsheetProps {
   activePeriodId: string | null;
 }
 
-function SortableSegment({ seg, periodColor, themeColor, onUpdate, onDelete }: { seg: Segment, periodColor?: string, themeColor: string, onUpdate: (id: string, updates: Partial<Segment>) => void, onDelete: (id: string) => void }) {
+function SortableSegment({ seg, periodColor, themeColor, onUpdate, onCopy, onDelete }: { seg: Segment, periodColor?: string, themeColor: string, onUpdate: (id: string, updates: Partial<Segment>) => void, onCopy: (seg: Segment) => void, onDelete: (id: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: seg.id,
     data: {
@@ -67,6 +67,9 @@ function SortableSegment({ seg, periodColor, themeColor, onUpdate, onDelete }: {
         onChange={e => onUpdate(seg.id, { durationMinutes: Number(e.target.value) || 0 })}
       />
       <span className="opacity-80 py-1 pr-2">m</span>
+      <button onClick={() => onCopy(seg)} className="p-1.5 border-l border-dashed hover:bg-black/5" style={{ borderColor: themeColor }}>
+        <Copy size={12} />
+      </button>
       <button onClick={() => onDelete(seg.id)} className="p-1.5 border-l border-dashed hover:bg-black/5" style={{ borderColor: themeColor }}>
         <Trash2 size={12} />
       </button>
@@ -119,6 +122,11 @@ function SortableRow({
       durationMinutes: 5
     };
     onChange(period.id, { segments: [...(period.segments || []), newSeg] });
+  };
+
+  const handleCopySegment = (seg: Segment) => {
+    const cloned = { ...seg, id: crypto.randomUUID() };
+    onChange(period.id, { segments: [...(period.segments || []), cloned] });
   };
 
   const handleDeleteSegment = (segmentId: string) => {
@@ -206,6 +214,7 @@ function SortableRow({
               periodColor={period.color}
               themeColor={themeColor}
               onUpdate={handleSegmentUpdate}
+              onCopy={handleCopySegment}
               onDelete={handleDeleteSegment}
             />
           ))}
