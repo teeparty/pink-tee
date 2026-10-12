@@ -1,17 +1,10 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import LZString from 'lz-string';
-import { AppState, Period } from './types';
+import { AppState } from './types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
-}
-
-export function getPeriodDuration(period: Period): number {
-  if (period.segments && period.segments.length > 0) {
-    return period.segments.reduce((sum, seg) => sum + (seg.durationMinutes || 0), 0);
-  }
-  return period.durationMinutes || 0;
 }
 
 export function formatCountdown(ms: number): string {

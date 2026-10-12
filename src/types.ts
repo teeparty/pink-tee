@@ -8,6 +8,8 @@ export interface Segment {
   color?: string;
 }
 
+// A block in one day's timeline, worked out from the schedule. Gaps between periods become
+// 'transition' blocks.
 export interface Period {
   id: string;
   name: string;
@@ -15,6 +17,25 @@ export interface Period {
   type: 'period' | 'transition';
   color?: string; // Optional custom color per period
   segments?: Segment[];
+}
+
+export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+// A period at set clock times, in minutes after midnight
+export interface ScheduledPeriod {
+  id: string;
+  name: string;
+  start: number;
+  end: number;
+  color?: string;
+  segments: Segment[];
+}
+
+export interface Schedule {
+  // The regular week: each weekday's periods, with that day's timers
+  weekdays: Partial<Record<Weekday, ScheduledPeriod[]>>;
+  // One-off days, keyed by date (YYYY-MM-DD), that replace the weekday's periods on that date
+  specials: Record<string, ScheduledPeriod[]>;
 }
 
 export interface ClockSettings {
@@ -50,12 +71,11 @@ export interface AppState {
   brandLogo: string;
   timingMode: TimingMode;
   mainFocusMode?: boolean;
-  startTime: string; // HH:mm format
   sequentialStartMs: number | null;
   sequentialElapsedMs: number;
   isSequentialPlaying: boolean;
   audioMode: AudioMode;
-  periods: Period[];
+  schedule: Schedule;
   clock: ClockSettings;
   windows: Record<string, WindowState>;
   pronunciations: PronunciationOverride[];

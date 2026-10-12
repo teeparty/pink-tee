@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Settings, Save, Volume2, Mic, VolumeX, Clock, LayoutGrid, X, Play, Pause, RotateCcw, SkipForward, SkipBack, Plus, Circle, Minus, Maximize, Heart } from 'lucide-react';
-import { AppState, WindowState, Period, Segment, AudioMode, TimingMode } from './types';
-import { saveStateToUrl, loadStateFromUrl, cn, getPeriodDuration } from './utils';
+import { AppState, WindowState, Period, ScheduledPeriod, Schedule, TimingMode } from './types';
+import { saveStateToUrl, loadStateFromUrl, cn } from './utils';
+import { WEEKDAYS, resolveDay, scheduleFromLegacy, dropPastSpecials } from './schedule';
 import { Window } from './components/Window';
-import { Spreadsheet } from './components/Spreadsheet';
+import { ScheduleEditor } from './components/ScheduleEditor';
 import { VisualTimer } from './components/VisualTimer';
 import { Summary } from './components/Summary';
 import { SegmentSummary } from './components/SegmentSummary';
@@ -12,29 +13,31 @@ import { playChime, playVoice } from './audio';
 import { format, differenceInMilliseconds, addMinutes, isAfter, isBefore } from 'date-fns';
 
 const defaultTheme = '#FF8DA1'; // That 90s pink
+const defaultPeriods: ScheduledPeriod[] = [
+  {
+    id: '1', name: 'Period 1', start: 8 * 60, end: 8 * 60 + 45,
+    segments: [
+      { id: 's1', name: 'Intro', durationMinutes: 10 },
+      { id: 's2', name: 'Activity', durationMinutes: 35 }
+    ]
+  },
+  { id: '3', name: 'Period 2', start: 8 * 60 + 50, end: 9 * 60 + 35, segments: [] },
+];
 const defaultState: AppState = {
   themeColor: defaultTheme,
   panelsThemeColor: defaultTheme,
   uiTitle: 'TEE BB SYSTEM',
   brandLogo: '',
   timingMode: 'wall',
-  startTime: '08:00',
   sequentialStartMs: null,
   sequentialElapsedMs: 0,
   isSequentialPlaying: false,
   audioMode: 'chime',
   pronunciations: [],
-  periods: [
-    { 
-      id: '1', name: 'Period 1', durationMinutes: 45, type: 'period',
-      segments: [
-        { id: 's1', name: 'Intro', durationMinutes: 10 },
-        { id: 's2', name: 'Activity', durationMinutes: 35 }
-      ]
-    },
-    { id: '2', name: 'Passing', durationMinutes: 5, type: 'transition', segments: [] },
-    { id: '3', name: 'Period 2', durationMinutes: 45, type: 'period', segments: [] },
-  ],
+  schedule: {
+    weekdays: Object.fromEntries(WEEKDAYS.slice(0, 5).map(day => [day, defaultPeriods])),
+    specials: {},
+  },
   clock: { style: 'ring', ringThickness: 150, labelScale: 1 },
   windows: {
     timer: { id: 'timer', x: 200, y: 50, width: 600, height: 600, isOpen: true, zIndex: 10 },
@@ -51,6 +54,10 @@ export default function App() {
   
   // Layout states
   const [spreadsheetOpen, setSpreadsheetOpen] = useState(false);
+  const [drawerView, setDrawerView] = useState<'table' | 'text'>('table');
+  // Each day's schedule text that hasn't been applied yet, kept while the drawer is closed
+  const [scheduleDrafts, setScheduleDrafts] = useState<Record<string, string>>({});
+  const hasDrafts = Object.keys(scheduleDrafts).length > 0;
 
   // Real-time calculation state
   const [activePeriodId, setActivePeriodId] = useState<string | null>(null);
@@ -68,11 +75,13 @@ export default function App() {
   const audioContextStarted = useRef(false);
 
   useEffect(() => {
-    let resolvedState: AppState | null = null;
+    // Older saves have one list of periods running back to back from a start time
+    type SavedState = AppState & { periods?: Period[]; startTime?: string };
+    let resolvedState: SavedState | null = null;
     
     // 1. Try URL parameters
-    const urlState = loadStateFromUrl();
-    if (urlState && urlState.periods) {
+    const urlState = loadStateFromUrl() as SavedState | null;
+    if (urlState && (urlState.schedule || urlState.periods)) {
       resolvedState = urlState;
     } else {
       // 2. Try localStorage persistence
@@ -86,10 +95,12 @@ export default function App() {
       }
     }
 
-    if (resolvedState && resolvedState.periods) {
+    if (resolvedState && (resolvedState.schedule || resolvedState.periods)) {
+      const { periods, startTime, ...saved } = resolvedState;
       setState({
         ...defaultState,
-        ...resolvedState,
+        ...saved,
+        schedule: dropPastSpecials(saved.schedule || scheduleFromLegacy(periods || [], startTime), new Date()),
         isSequentialPlaying: false,
         sequentialStartMs: null,
         clock: {
@@ -131,17 +142,14 @@ export default function App() {
       const now = new Date();
       setCurrentTime(now);
       
-      const { periods } = state;
-      if (periods.length === 0) return;
+      const { periods, startMinutes } = resolveDay(state.schedule, now);
       
       let simulatedNowTimeMs = now.getTime();
       let scheduleStartMs = now.getTime();
 
       if (state.timingMode === 'wall') {
-        if (!state.startTime) return;
-        const [h, m] = state.startTime.split(':').map(Number);
         let periodStart = new Date(now);
-        periodStart.setHours(h, m, 0, 0);
+        periodStart.setHours(0, startMinutes, 0, 0);
         scheduleStartMs = periodStart.getTime();
       } else {
         if (state.isSequentialPlaying && state.sequentialStartMs) {
@@ -165,7 +173,7 @@ export default function App() {
 
       for (let i = 0; i < periods.length; i++) {
         const p = periods[i];
-        const pDurMs = getPeriodDuration(p) * 60 * 1000;
+        const pDurMs = p.durationMinutes * 60 * 1000;
         const periodEndMs = periodStartMs + pDurMs;
         
         if (simulatedNowTimeMs >= periodStartMs && simulatedNowTimeMs < periodEndMs) {
@@ -175,21 +183,20 @@ export default function App() {
           foundNext = periods[i + 1] || null;
 
           // Check segments
-          if (p.segments && p.segments.length > 0) {
-            let segStartMs = periodStartMs;
-            for (const seg of p.segments) {
-              const segDurMs = seg.durationMinutes * 60 * 1000;
-              const segEndMs = segStartMs + segDurMs;
-              if (simulatedNowTimeMs >= segStartMs && simulatedNowTimeMs < segEndMs) {
-                foundActiveSegment = seg.id;
-                remainingMs = segEndMs - simulatedNowTimeMs;
-                totalMs = segDurMs;
-                break;
-              }
-              segStartMs = segEndMs;
+          let segStartMs = periodStartMs;
+          for (const seg of p.segments || []) {
+            const segDurMs = seg.durationMinutes * 60 * 1000;
+            const segEndMs = Math.min(segStartMs + segDurMs, periodEndMs);
+            if (simulatedNowTimeMs >= segStartMs && simulatedNowTimeMs < segEndMs) {
+              foundActiveSegment = seg.id;
+              remainingMs = segEndMs - simulatedNowTimeMs;
+              totalMs = segDurMs;
+              break;
             }
-          // fallback to period
-          } else {
+            segStartMs = segEndMs;
+          }
+          // fallback to period, when it has no segments or they end before it does
+          if (!foundActiveSegment) {
              remainingMs = pRemainingMs;
              totalMs = pTotalMs;
           }
@@ -260,23 +267,23 @@ export default function App() {
     }));
   };
 
-  const handlePeriodUpdate = (newPeriods: Period[]) => {
-    updateState(s => ({ ...s, periods: newPeriods }));
+  const handleScheduleChange = (schedule: Schedule) => {
+    updateState(s => ({ ...s, schedule }));
   };
 
   const skipTo = (direction: 'next' | 'prev') => {
     const timeline: {start: number, end: number}[] = [];
     let t = 0;
-    state.periods.forEach(p => {
-       if (p.segments && p.segments.length > 0) {
-          p.segments.forEach(s => {
-             timeline.push({ start: t, end: t + s.durationMinutes * 60000 });
-             t += s.durationMinutes * 60000;
-          });
-       } else {
-          timeline.push({ start: t, end: t + p.durationMinutes * 60000 });
-          t += p.durationMinutes * 60000;
-       }
+    resolveDay(state.schedule, new Date()).periods.forEach(p => {
+       const end = t + p.durationMinutes * 60000;
+       // Segments stop at the end of their period, and any time they don't cover is its own stop
+       (p.segments || []).forEach(s => {
+          const segEnd = Math.min(end, t + s.durationMinutes * 60000);
+          if (segEnd > t) timeline.push({ start: t, end: segEnd });
+          t = segEnd;
+       });
+       if (t < end) timeline.push({ start: t, end });
+       t = end;
     });
 
     const nowMs = state.isSequentialPlaying && state.sequentialStartMs 
@@ -312,7 +319,8 @@ export default function App() {
 
   const themeColor = state.themeColor;
   
-  const currentPeriod = state.periods.find(p => p.id === activePeriodId) || null;
+  const day = resolveDay(state.schedule, currentTime);
+  const currentPeriod = day.periods.find(p => p.id === activePeriodId) || null;
   const currentSegment = currentPeriod?.segments?.find(s => s.id === activeSegmentId) || null;
 
   return (
@@ -358,14 +366,6 @@ export default function App() {
           
           {state.timingMode === 'wall' ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs uppercase opacity-70 hidden md:inline">Start</span>
-              <input 
-                type="time" 
-                value={state.startTime}
-                onChange={e => updateState(s => ({ ...s, startTime: e.target.value }))}
-                className="bg-transparent border-2 outline-none px-2 py-1 text-xs md:text-sm font-bold shadow-[2px_2px_0_rgba(0,0,0,0.1)]"
-                style={{ borderColor: themeColor, color: themeColor }}
-              />
               <button
                  onClick={() => updateState(s => ({ ...s, windows: { ...s.windows, summary: { ...s.windows.summary, isOpen: true } } }))}
                  className="p-1.5 border-2 shadow-[2px_2px_0_rgba(0,0,0,0.1)] hover:bg-black/5 ml-1 bg-black text-white"
@@ -673,7 +673,7 @@ export default function App() {
               }
             >
               <Summary 
-                periods={state.periods}
+                periods={day.periods}
                 activePeriodId={activePeriodId}
                 themeColor={themeColor}
                 periodRemainingMs={periodRemainingMs}
@@ -759,18 +759,32 @@ export default function App() {
          {spreadsheetOpen && (
            <div className="flex-none h-1/2 min-h-[400px] border-t-8 flex flex-col relative bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.05)]" style={{ borderColor: themeColor }}>
               <div className="absolute top-0 right-0 -mt-8 bg-white border-4 border-b-0 px-2 flex py-1 items-center gap-2" style={{ borderColor: themeColor }}>
+                {(['table', 'text'] as const).map(view => (
+                  <button
+                    key={view}
+                    onClick={() => setDrawerView(view)}
+                    className="text-xs font-bold uppercase px-2 hover:opacity-70"
+                    style={drawerView === view ? { backgroundColor: themeColor, color: 'white' } : { color: themeColor }}
+                    title={view === 'text' && hasDrafts ? 'Text has changes that are not applied yet' : undefined}
+                  >
+                    {view}{view === 'text' && hasDrafts ? ' *' : ''}
+                  </button>
+                ))}
                 <button 
                   onClick={() => setSpreadsheetOpen(false)}
-                  className="hover:opacity-70 text-xs font-bold uppercase flex items-center gap-1"
+                  className="hover:opacity-70 text-xs font-bold uppercase flex items-center gap-1 ml-2"
                   style={{ color: themeColor }}
                 >
                    Close Spreadsheet <X size={14} />
                 </button>
               </div>
-              <Spreadsheet 
-                periods={state.periods}
-                onUpdatePeriods={handlePeriodUpdate}
-                startTime={state.startTime}
+              <ScheduleEditor
+                view={drawerView}
+                schedule={state.schedule}
+                onChange={handleScheduleChange}
+                drafts={scheduleDrafts}
+                onDraftsChange={setScheduleDrafts}
+                now={currentTime}
                 themeColor={themeColor}
                 activePeriodId={activePeriodId}
               />
