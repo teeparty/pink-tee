@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Settings, Save, Volume2, Mic, VolumeX, Clock, LayoutGrid, X, Play, Pause, RotateCcw, SkipForward, SkipBack, Plus, Circle, Minus, Maximize, Heart } from 'lucide-react';
+import { Settings, Save, Download, Upload, Volume2, Mic, VolumeX, Clock, LayoutGrid, X, Play, Pause, RotateCcw, SkipForward, SkipBack, Plus, Circle, Minus, Maximize, Heart } from 'lucide-react';
 import { AppState, WindowState, Period, ScheduledPeriod, Schedule, TimingMode } from './types';
-import { saveStateToUrl, loadStateFromUrl, cn } from './utils';
+import { saveStateToUrl, loadStateFromUrl, stateFromJson, clearStateFromUrl, downloadStateFile, cn } from './utils';
 import { WEEKDAYS, resolveDay, scheduleFromLegacy, dropPastSpecials } from './schedule';
 import { Window } from './components/Window';
 import { ScheduleEditor } from './components/ScheduleEditor';
@@ -48,6 +48,22 @@ const defaultState: AppState = {
   }
 };
 
+// Older saves have one list of periods running back to back from a start time
+type SavedState = AppState & { periods?: Period[]; startTime?: string };
+
+// A saved state, from a bookmark, a setup file or the browser, filled out to the current format
+function restoreState({ periods, startTime, ...saved }: SavedState): AppState {
+  return {
+    ...defaultState,
+    ...saved,
+    schedule: dropPastSpecials(saved.schedule || scheduleFromLegacy(periods || [], startTime), new Date()),
+    isSequentialPlaying: false,
+    sequentialStartMs: null,
+    clock: { ...defaultState.clock, ...(saved.clock || {}) },
+    windows: { ...defaultState.windows, ...(saved.windows || {}) },
+  };
+}
+
 export default function App() {
   const [state, setState] = useState<AppState>(defaultState);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -75,8 +91,6 @@ export default function App() {
   const audioContextStarted = useRef(false);
 
   useEffect(() => {
-    // Older saves have one list of periods running back to back from a start time
-    type SavedState = AppState & { periods?: Period[]; startTime?: string };
     let resolvedState: SavedState | null = null;
     
     // 1. Try URL parameters
@@ -96,22 +110,7 @@ export default function App() {
     }
 
     if (resolvedState && (resolvedState.schedule || resolvedState.periods)) {
-      const { periods, startTime, ...saved } = resolvedState;
-      setState({
-        ...defaultState,
-        ...saved,
-        schedule: dropPastSpecials(saved.schedule || scheduleFromLegacy(periods || [], startTime), new Date()),
-        isSequentialPlaying: false,
-        sequentialStartMs: null,
-        clock: {
-           ...defaultState.clock,
-           ...(resolvedState.clock || {})
-        },
-        windows: { 
-           ...defaultState.windows, 
-           ...(resolvedState.windows || {})
-        }
-      });
+      setState(restoreState(resolvedState));
     }
     
     const clickHandler = () => { audioContextStarted.current = true; };
@@ -131,6 +130,24 @@ export default function App() {
 
   const handleSaveToUrl = () => {
     saveStateToUrl(state);
+  };
+
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // So picking the same file again still counts as a change
+    e.target.value = '';
+    if (!file) return;
+    const saved = stateFromJson(await file.text()) as SavedState | null;
+    if (!saved) {
+      window.alert(`${file.name} isn't a saved setup. Use a file made with Export File.`);
+      return;
+    }
+    if (!window.confirm(`Replace all your current settings with the ones in ${file.name}?`)) return;
+    setState(restoreState(saved));
+    // A bookmark still in the address bar would bring its own settings back on reload
+    clearStateFromUrl();
   };
 
   const currentActiveSegmentRef = useRef<string | null>(null);
@@ -603,6 +620,25 @@ export default function App() {
           >
             <Save size={16} /> <span className="hidden xl:inline">Bookmark State</span>
           </button>
+
+          <button 
+            onClick={() => downloadStateFile(state)}
+            className="flex items-center gap-2 border-2 px-3 py-1.5 font-bold uppercase text-xs cursor-pointer hover:bg-black/5 shadow-[2px_2px_0_rgba(0,0,0,0.1)]"
+            style={{ borderColor: themeColor, color: themeColor, backgroundColor: 'white' }}
+            title="Save All Settings to a File"
+          >
+            <Download size={16} /> <span className="hidden xl:inline">Export File</span>
+          </button>
+
+          <button 
+            onClick={() => importInputRef.current?.click()}
+            className="flex items-center gap-2 border-2 px-3 py-1.5 font-bold uppercase text-xs cursor-pointer hover:bg-black/5 shadow-[2px_2px_0_rgba(0,0,0,0.1)]"
+            style={{ borderColor: themeColor, color: themeColor, backgroundColor: 'white' }}
+            title="Load Settings from a File"
+          >
+            <Upload size={16} /> <span className="hidden xl:inline">Import File</span>
+          </button>
+          <input ref={importInputRef} type="file" accept=".json,application/json" onChange={handleImportFile} className="hidden" />
         </div>
         )}
       </div>

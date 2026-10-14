@@ -28,5 +28,5 @@ npm run build:single
 This writes `dist-single/bell-schedule.html`, with all the code, styles, fonts, and the cat video inlined (~3 MB). Copy it to any computer and double-click it to open it in the browser. No server, install, or network access is required.
 
 - Re-run `npm run build:single` after making changes, then copy the new file over.
-- Settings are saved in the browser separately from the website. To carry a setup over, click **Bookmark State** on the website, then append the `#state=...` part of its URL to the file's URL.
+- Settings are saved in the browser separately from the website. To carry a setup over, click **Export File** on the website and **Import File** in the file. Or click **Bookmark State** on the website, then append the `#state=...` part of its URL to the file's URL.
 - The regular `npm run build` (used for GitHub Pages) is unaffected.
