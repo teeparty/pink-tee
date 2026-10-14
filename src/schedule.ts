@@ -301,7 +301,9 @@ function readTimerLine(content: string): Omit<TimerLine, 'line'> | { error: stri
   return timer;
 }
 
-const newId = () => crypto.randomUUID();
+// Ids only need to be unique while the page is open. Not crypto.randomUUID, which browsers from
+// before 2022 don't have.
+export const newId = () => Math.random().toString(36).slice(2, 12);
 
 function readLines(text: string, fail: (line: number, message: string) => void): PeriodLine[] {
   const periods: PeriodLine[] = [];

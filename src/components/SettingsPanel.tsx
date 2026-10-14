@@ -1,5 +1,6 @@
 import React from 'react';
 import { AppState, PronunciationOverride } from '../types';
+import { newId } from '../schedule';
 import { Plus, Trash2 } from 'lucide-react';
 
 interface SettingsPanelProps {
@@ -14,7 +15,7 @@ export function SettingsPanel({ state, updateState, themeColor }: SettingsPanelP
       ...s,
       pronunciations: [
         ...s.pronunciations,
-        { id: crypto.randomUUID(), original: '', replacement: '' }
+        { id: newId(), original: '', replacement: '' }
       ]
     }));
   };

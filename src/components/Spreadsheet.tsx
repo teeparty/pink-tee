@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalList
 import { CSS } from '@dnd-kit/utilities';
 import { ScheduledPeriod, Segment } from '../types';
 import { GripVertical, Trash2, Plus, Copy } from 'lucide-react';
-import { formatMinutes, fromTimeInput, periodProblems, timerProblem, toTimeInput } from '../schedule';
+import { formatMinutes, fromTimeInput, newId, periodProblems, timerProblem, toTimeInput } from '../schedule';
 
 // One day's periods as a table
 interface SpreadsheetProps {
@@ -111,7 +111,7 @@ function PeriodRow({
 
   const handleAddSegment = () => {
     const newSeg: Segment = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: `Seg ${(period.segments || []).length + 1}`,
       durationMinutes: 5
     };
@@ -119,7 +119,7 @@ function PeriodRow({
   };
 
   const handleCopySegment = (seg: Segment) => {
-    const cloned = { ...seg, id: crypto.randomUUID() };
+    const cloned = { ...seg, id: newId() };
     onChange(period.id, { segments: [...(period.segments || []), cloned] });
   };
 
@@ -331,7 +331,7 @@ export function Spreadsheet({ periods, onChange: setPeriods, themeColor, activeP
 
   const handleAdd = () => {
     const newPeriod: ScheduledPeriod = {
-        id: crypto.randomUUID(),
+        id: newId(),
         name: `Block ${periods.length + 1}`,
         start: lastEnd,
         end: lastEnd + 45,
@@ -345,9 +345,9 @@ export function Spreadsheet({ periods, onChange: setPeriods, themeColor, activeP
   };
 
   const handleCopy = (p: ScheduledPeriod) => {
-    const cloned = { ...p, id: crypto.randomUUID(), name: p.name + ' (Copy)', start: lastEnd, end: lastEnd + (p.end - p.start) };
+    const cloned = { ...p, id: newId(), name: p.name + ' (Copy)', start: lastEnd, end: lastEnd + (p.end - p.start) };
     // deep clone segments
-    cloned.segments = cloned.segments.map(s => ({ ...s, id: crypto.randomUUID() }));
+    cloned.segments = cloned.segments.map(s => ({ ...s, id: newId() }));
     setPeriods([...periods, cloned]);
   };
 
