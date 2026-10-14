@@ -478,6 +478,32 @@ export function keepIds(next: ScheduledPeriod[], previous: ScheduledPeriod[]): S
   });
 }
 
+// ---------------------------------------------------------------------------------------------
+// Bookmarks
+
+// Ids only matter while the page is open (see keepIds), and random ones would be most of a
+// bookmark's length. So bookmarks save the schedule without them, and loading makes new ones.
+export type SavedPeriod = Omit<ScheduledPeriod, 'id' | 'segments'> & { segments: Omit<Segment, 'id'>[] };
+type Days<T> = { weekdays: Partial<Record<Weekday, T[]>>; specials: Record<string, T[]> };
+
+function mapDays<A, B>(schedule: Days<A>, fn: (periods: A[]) => B[]): Days<B> {
+  const map = (days: Partial<Record<string, A[]>>) =>
+    Object.fromEntries(Object.entries(days).flatMap(([key, periods]) => (periods ? [[key, fn(periods)]] : [])));
+  return { weekdays: map(schedule.weekdays), specials: map(schedule.specials) };
+}
+
+export function withoutIds(schedule: Schedule): Days<SavedPeriod> {
+  return mapDays(schedule, periods =>
+    periods.map(({ id, segments, ...period }) => ({ ...period, segments: segments.map(({ id, ...segment }) => segment) })),
+  );
+}
+
+export function withNewIds(schedule: Days<SavedPeriod>): Schedule {
+  return mapDays(schedule, periods =>
+    periods.map(period => ({ ...period, id: newId(), segments: period.segments.map(segment => ({ ...segment, id: newId() })) })),
+  );
+}
+
 // The old single schedule (periods back to back from one start time) becomes the same bell times
 // and timers on every weekday
 export function scheduleFromLegacy(periods: Period[], startTime = '08:00'): Schedule {

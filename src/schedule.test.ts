@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatDate, formatDay, formatDayAndDate, keepIds, parseDay, parseTimeRange, resolveDay, scheduleFromLegacy } from './schedule.ts';
+import { formatDate, formatDay, formatDayAndDate, keepIds, parseDay, parseTimeRange, resolveDay, scheduleFromLegacy, withNewIds, withoutIds as bookmarkSchedule } from './schedule.ts';
 import type { Period, Schedule, ScheduledPeriod } from './types.ts';
 
 // Monday, Oct 12 2026
@@ -240,6 +240,18 @@ test('keeps ids for periods and timers whose names did not change', () => {
   // Periods with the same name each keep their own id
   const twice = parse('Math, 8:00 - 8:45\nMath, 9:00 - 9:45\n');
   assert.deepEqual(keepIds(parse('Math, 8:00 - 8:45\nMath, 9:00 - 9:50\n'), twice).map(p => p.id), twice.map(p => p.id));
+});
+
+test('bookmarks leave out ids and get new ones when loaded', () => {
+  const schedule: Schedule = { weekdays: { monday: parse(monday) }, specials: { '2026-10-16': parse('Assembly, 9:00 - 10:00\n') } };
+  const saved = bookmarkSchedule(schedule);
+  assert.ok(!JSON.stringify(saved).includes('"id"'));
+
+  const loaded = withNewIds(JSON.parse(JSON.stringify(saved)));
+  assert.equal(formatDay(loaded.weekdays.monday!), formatDay(schedule.weekdays.monday!));
+  assert.equal(formatDay(loaded.specials['2026-10-16']), 'Assembly, 9:00 - 10:00\n');
+  const ids = (s: Schedule) => [...Object.values(s.weekdays), ...Object.values(s.specials)].flat().flatMap(p => [p!.id, ...p!.segments.map(t => t.id)]);
+  assert.equal(new Set([...ids(schedule), ...ids(loaded)]).size, ids(schedule).length * 2);
 });
 
 test('turns the old single schedule into the same day every weekday', () => {

@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import LZString from 'lz-string';
 import { AppState } from './types';
+import { withNewIds, withoutIds } from './schedule';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,20 +16,26 @@ export function formatCountdown(ms: number): string {
 }
 
 export function saveStateToUrl(state: AppState) {
-  const jsonString = JSON.stringify(state);
+  const jsonString = JSON.stringify({ ...state, schedule: withoutIds(state.schedule) });
   const compressed = LZString.compressToEncodedURIComponent(jsonString);
-  window.history.replaceState(null, '', `?state=${compressed}`);
+  // After the #, the state stays in the browser. In the query string it went to the server,
+  // which turns long URLs away (414).
+  window.history.replaceState(null, '', `${window.location.pathname}#state=${compressed}`);
 }
 
 export function loadStateFromUrl(): AppState | null {
-  const params = new URLSearchParams(window.location.search);
-  const stateParam = params.get('state');
+  // Older bookmarks have the state in the query string
+  const stateParam =
+    new URLSearchParams(window.location.hash.slice(1)).get('state') ??
+    new URLSearchParams(window.location.search).get('state');
   if (!stateParam) return null;
 
   try {
     const decompressed = LZString.decompressFromEncodedURIComponent(stateParam);
     if (!decompressed) return null;
-    return JSON.parse(decompressed) as AppState;
+    const state = JSON.parse(decompressed) as AppState;
+    if (state.schedule) state.schedule = withNewIds(state.schedule);
+    return state;
   } catch (e) {
     console.error('Failed to parse state from URL', e);
     return null;
